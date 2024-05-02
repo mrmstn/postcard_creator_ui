@@ -1,10 +1,11 @@
 import base64
+from pathlib import Path
 
 import requests
 
 from postcard_creator.postcard_img_util import create_text_image, rotate_and_scale_image
 from postcard_creator.postcard_creator import PostcardCreatorBase, PostcardCreatorException, Recipient, Sender, \
-    _dump_request, _send_free_card_defaults, logger
+    _dump_request, _send_free_card_defaults, logger, Postcard
 
 
 def _format_sender(sender: Sender):
@@ -114,7 +115,23 @@ class PostcardCreatorSwissId(PostcardCreatorBase):
                                                              image_export=image_export,
                                                              enforce_size=True,
                                                              **kwargs)).decode('ascii')
-        img_text_base64 = base64.b64encode(self.create_text_cover(postcard.message)).decode('ascii')
+        if postcard.message_image_stream is not None:
+            kwargs['image_target_width'] = 720
+            kwargs['image_quality_factor'] = 1
+            kwargs['image_target_height'] = 744
+            kwargs['image_rotate'] = False
+            img_text_base64 = base64.b64encode(rotate_and_scale_image(postcard.message_image_stream,
+                                                                      img_format='jpeg',
+                                                                      image_export=image_export,
+                                                                      enforce_size=True,
+                                                                      **kwargs)).decode('ascii')
+        else:
+            img_text_base64 = base64.b64encode(self.create_text_cover(postcard.message)).decode('ascii')
+
+        stamp_base64 = None
+        if postcard.message_image_stream is not None:
+            stamp_base64 = base64.b64encode(self.create_text_cover(postcard.message)).decode('ascii')
+
         endpoint = '/card/upload'
         payload = {
             'lang': 'en',
@@ -124,13 +141,15 @@ class PostcardCreatorSwissId(PostcardCreatorBase):
             'text': '',
             'textImage': img_text_base64,  # jpeg, JFIF standard 1.01, 720x744
             'image': img_base64,  # jpeg, JFIF standard 1.01, 1819x1311
-            'stamp': None
+            'stamp': stamp_base64  # jpeg, JFIF standard 1.01, 343x248
         }
 
         if mock_send:
             copy = dict(payload)
             copy['textImage'] = 'omitted'
             copy['image'] = 'omitted'
+            Path("textImage.jpg").write_bytes(base64.b64decode(img_text_base64))
+            Path("image.jpg").write_bytes(base64.b64decode(img_base64))
             logger.info(f'mock_send=True, endpoint: {endpoint}, payload: {copy}')
             return False
 
@@ -151,3 +170,14 @@ class PostcardCreatorSwissId(PostcardCreatorBase):
         Create a jpg with given text
         """
         return create_text_image(msg, image_export=True)
+
+    def create_stamp(self, postcard: Postcard, image_export):
+        return rotate_and_scale_image(postcard.picture_stream,
+                                      image_target_width=343,
+                                      image_target_height=248,
+                                      image_quality_factor=1,
+                                      img_format='jpeg',
+                                      image_export=image_export,
+                                      enforce_size=True,
+                                      image_rotate=False
+                                      )

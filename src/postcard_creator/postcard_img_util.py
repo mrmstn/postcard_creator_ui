@@ -13,6 +13,15 @@ from resizeimage import resizeimage
 from postcard_creator.postcard_creator import logger, _get_trace_postcard_sent_dir
 
 
+def make_cover_image(file, **kwargs) -> Image:
+    kwargs['image_target_width'] = 1819
+    kwargs['image_quality_factor'] = 1
+    kwargs['image_target_height'] = 1311
+    kwargs['img_format'] = 'jpeg'
+    kwargs['enforce_size'] = True
+    return rotate_and_scale_image(file, **kwargs)
+
+
 def rotate_and_scale_image(file, image_target_width=154,
                            image_target_height=111,
                            image_quality_factor=20,
@@ -105,7 +114,7 @@ def create_text_image(text, image_export=False, **kwargs):
             while l < r:
                 n = floor((l + r) / 2)
                 t = ''.join([char * n for char in '1'])
-                font_w, font_h = font.getsize(t)
+                font_w, font_h = font.getbbox(t)[-2:]
                 font_w = font_w + (2 * line_padding)
                 if font_w >= text_canvas_w:
                     r = n - 1
@@ -132,9 +141,9 @@ def create_text_image(text, image_export=False, **kwargs):
                 cur_lines = textwrap.wrap(line, width=line_w)
                 for cur_line in cur_lines:
                     lines.append(cur_line)
-            
+
             font = load_font(size)
-            total_w, line_h = font.getsize(msg)
+            total_w, line_h = font.getbbox(msg)[-2:]
             tot_height = len(lines) * line_h
 
             if tot_height + (2 * padding) < text_canvas_h:
@@ -161,8 +170,8 @@ def create_text_image(text, image_export=False, **kwargs):
     logger.debug(f'using font with size: {size}, width: {line_w}')
 
     font = load_font(size)
-    font_w, font_h = font.getsize(text)
-    
+    font_w, font_h = font.getbbox(text)[-2:]
+
     lines = []
     for line in text.splitlines():
         cur_lines = textwrap.wrap(line, width=line_w)
@@ -173,7 +182,7 @@ def create_text_image(text, image_export=False, **kwargs):
     canvas = Image.new('RGB', (text_canvas_w, text_canvas_h), text_canvas_bg)
     draw = ImageDraw.Draw(canvas)
     for line in lines:
-        width, height = font.getsize(line)
+        width, height = font.getbbox(line)[-2:]
         draw.text(((text_canvas_w - width) // 2, text_y_start), line,
                   font=font,
                   fill=text_canvas_fg,

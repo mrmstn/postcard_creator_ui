@@ -1,0 +1,63 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: streamlit-deployment
+  labels:
+    app: streamlit
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: streamlit
+  template:
+    metadata:
+      labels:
+        app: streamlit
+    spec:
+      containers:
+        - name: oauth2-proxy
+          image: quay.io/oauth2-proxy/oauth2-proxy:v7.2.0
+          args: ["--config", "/etc/oauth2-proxy/oauth2-proxy.cfg"]
+          ports:
+            - containerPort: 4180
+          livenessProbe:
+            httpGet:
+              path: /ping
+              port: 4180
+              scheme: HTTP
+          readinessProbe:
+            httpGet:
+              path: /ping
+              port: 4180
+              scheme: HTTP
+          volumeMounts:
+            - mountPath: "/etc/oauth2-proxy"
+              name: oauth2-config
+        - name: streamlit
+          image: gcr.io/GCP_PROJECT_ID/k8s-streamlit:test
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8501
+          livenessProbe:
+            httpGet:
+              path: /_stcore/health
+              port: 8501
+              scheme: HTTP
+            timeoutSeconds: 1
+          readinessProbe:
+            httpGet:
+              path: /_stcore/health
+              port: 8501
+              scheme: HTTP
+            timeoutSeconds: 1
+          resources:
+            limits:
+              cpu: 1
+              memory: 2Gi
+            requests:
+              cpu: 100m
+              memory: 745Mi
+      volumes:
+        - name: oauth2-config
+          configMap:
+            name: streamlit-configmap

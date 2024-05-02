@@ -1,0 +1,61 @@
+[tool.poetry]
+name = "postcard_creator"
+version = "0.1.0"
+description = "A delicate wrapper, spun 'round the Swiss Post's API"
+authors = ["Andrin Bertschi <apps@abertschi.ch>"]
+license = "Apache Software License"
+repository = "http://github.com/abertschi/postcard_creator_wrapper"
+keywords = ["postcard", "creator", "swiss"]
+classifiers = [
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3.12"
+]
+
+include = [
+    "LICENSE.md",
+    "README.md",
+    "postcard_creator/page_1.svg",
+    "postcard_creator/page_2.svg",
+    "postcard_creator/open_sans_emoji.ttf",
+    "postcard_creator/OpenSans-Regular.ttf"
+]
+
+[tool.poetry.dependencies]
+python = "^3.12"
+beautifulsoup4 = "*"
+certifi = "*"
+chardet = "*"
+charset-normalizer = "*"
+colorthief = "*"
+cookies = "*"
+distlib = "*"
+filelock = "*"
+idna = "*"
+olefile = "*"
+Pillow = "*"
+platformdirs = "*"
+pluggy = "*"
+py = "*"
+python_resize_image = "*"
+requests = "*"
+requests-toolbelt = "*"
+responses = "*"
+six = "*"
+tox = "*"
+urllib3 = "*"
+python-dotenv = "*"
+setuptools = "*"
+streamlit = "*"
+svgpathtools = "*"
+svgwrite = "*"
+streamlit-drawable-canvas-mrmstn = { url = "https://github.com/mrmstn/streamlit-drawable-canvas/releases/download/v0.9.5/streamlit_drawable_canvas_mrmstn-0.9.5.tar.gz" }
+streamlit-extras = "^0.4.2"
+streamlit-image-select = "^0.6.0"
+
+[tool.poetry.dev-dependencies]
+
+
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"

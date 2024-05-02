@@ -14,6 +14,7 @@ logger = logging.getLogger('postcard_creator')
 logging.addLevelName(LOGGING_TRACE_LVL, 'TRACE')
 setattr(logger, 'trace', lambda *args: logger.log(LOGGING_TRACE_LVL, *args))
 
+
 def _get_trace_postcard_sent_dir():
     path = os.path.join(os.getcwd(), '.postcard_creator_wrapper_sent')
     Path(path).mkdir(parents=True, exist_ok=True)
@@ -67,17 +68,18 @@ class Recipient(object):
 
 
 class Postcard(object):
-    def __init__(self, sender, recipient, picture_stream, message=''):
+    def __init__(self, sender, recipient, picture_stream, message_image_stream, message=''):
         self.recipient = recipient
         self.message = message
         self.picture_stream = picture_stream
+        self.message_image_stream = message_image_stream
         self.sender = sender
 
     def is_valid(self):
         return self.recipient is not None \
-               and self.recipient.is_valid() \
-               and self.sender is not None \
-               and self.sender.is_valid()
+            and self.recipient.is_valid() \
+            and self.sender is not None \
+            and self.sender.is_valid()
 
     def validate(self):
         if self.recipient is None or not self.recipient.is_valid():
@@ -96,6 +98,7 @@ def _send_free_card_defaults(func):
         return func(*args, **kwargs)
 
     return wrapped
+
 
 class PostcardCreator(object):
     def __init__(self, token=None):
