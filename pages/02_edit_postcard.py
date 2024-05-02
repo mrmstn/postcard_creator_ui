@@ -7,8 +7,8 @@ from PIL import Image
 from pyarrow import ArrowTypeError
 from streamlit_drawable_canvas import st_canvas
 
+from postcard_creator import helper
 from postcard_creator import postcard_img_util
-from postcard_ui import helper
 
 text_canvas_w = 720
 text_canvas_h = 744

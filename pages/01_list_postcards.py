@@ -1,10 +1,11 @@
+import os
 from pathlib import Path
 
 import streamlit as st
 
-from postcard_ui import helper
+from postcard_creator import helper
 
-POSTCARD_DIR = Path("/home/mr/Downloads/Dani und Livia Flitterwuche Rambazamba")
+POSTCARD_DIR = Path(os.getenv("POSTCARD_DIR"))
 ALLOWED_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.gif']
 
 

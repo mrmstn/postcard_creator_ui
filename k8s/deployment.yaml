@@ -15,29 +15,14 @@ spec:
         app: streamlit
     spec:
       containers:
-        - name: oauth2-proxy
-          image: quay.io/oauth2-proxy/oauth2-proxy:v7.2.0
-          args: ["--config", "/etc/oauth2-proxy/oauth2-proxy.cfg"]
-          ports:
-            - containerPort: 4180
-          livenessProbe:
-            httpGet:
-              path: /ping
-              port: 4180
-              scheme: HTTP
-          readinessProbe:
-            httpGet:
-              path: /ping
-              port: 4180
-              scheme: HTTP
-          volumeMounts:
-            - mountPath: "/etc/oauth2-proxy"
-              name: oauth2-config
         - name: streamlit
           image: gcr.io/GCP_PROJECT_ID/k8s-streamlit:test
           imagePullPolicy: Always
           ports:
             - containerPort: 8501
+          envFrom:
+          - configMapRef:
+              name: streamlit-config
           livenessProbe:
             httpGet:
               path: /_stcore/health
@@ -57,7 +42,3 @@ spec:
             requests:
               cpu: 100m
               memory: 745Mi
-      volumes:
-        - name: oauth2-config
-          configMap:
-            name: streamlit-configmap

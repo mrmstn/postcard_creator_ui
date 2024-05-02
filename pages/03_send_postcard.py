@@ -4,8 +4,8 @@ from pathlib import PosixPath
 import streamlit as st
 from dotenv import dotenv_values
 
+from postcard_creator import helper
 from postcard_creator.postcard_creator import PostcardCreator, Postcard, Token, Recipient, Sender
-from postcard_ui import helper
 
 
 @st.cache_resource

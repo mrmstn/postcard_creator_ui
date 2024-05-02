@@ -1,3 +1,13 @@
+FROM python:3.12-slim AS builder
+RUN apt-get update && \
+    apt-get install --no-install-suggests --no-install-recommends --yes pipx
+ENV PATH="/root/.local/bin:${PATH}"
+RUN pipx install poetry
+RUN pipx inject poetry poetry-plugin-bundle
+WORKDIR /src
+COPY . .
+RUN poetry bundle venv --python=/usr/bin/python3 /venv
+
 FROM python:3.12-slim
 
 RUN groupadd --gid 1000 appuser \
@@ -15,13 +25,15 @@ RUN apt-get update && apt-get install -y \
 USER appuser
 WORKDIR /home/appuser
 
-RUN git clone https://github.com/streamlit/streamlit-example.git app
+COPY --from=builder /venv /venv
+ENV VIRTUAL_ENV=/venv
 
-ENV VIRTUAL_ENV=/home/appuser/venv
-RUN virtualenv ${VIRTUAL_ENV}
-RUN . ${VIRTUAL_ENV}/bin/activate && pip install -r app/requirements.txt
+WORKDIR /home/appuser/app
+
+COPY streamlit_app.py   ./streamlit_app.py
+COPY pages              ./pages
 
 EXPOSE 8501
 
-COPY run.sh /home/appuser
-ENTRYPOINT ["./run.sh"]
+COPY docker/run.sh /home/appuser
+CMD ["/home/appuser/run.sh"]

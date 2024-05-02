@@ -1,0 +1,8 @@
+resources:
+- deployment.yaml
+- service.yaml
+- ingress.yaml
+
+configMapGenerator:
+- name: streamlit-config
+  env: ./.env
