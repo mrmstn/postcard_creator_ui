@@ -27,7 +27,6 @@ def init_client():
 
 
 def get_canvas_json(theme):
-
     chat_completion = client.chat.completions.create(
         messages=[
             {
@@ -55,29 +54,57 @@ def get_canvas_json(theme):
 
 
 def ask_chatgpt():
-    st.title("Canvas JSON Generator")
+    global initial_drawing
+    st.title("Initial Canvas Generator")
 
-    # Initialize or reset session state
-    if 'refresh' not in st.session_state:
-        st.session_state.refresh = False
+    theme = st.text_input("Was soll automatisch gezeichnet werden? (Leer lassen für nichts ;))")
 
-    theme = st.text_input("Enter the theme for your Fabric.js canvas:")
-
-    if st.button("Generate JSON"):
+    if st.button("Generate Canvas"):
         if theme:
             try:
                 json_output = get_canvas_json(theme)
                 generated_struct = json.loads(json_output)
-                initial_drawing=generated_struct
-                st.text_area("JSON Output:", json_output, height=300)
+                initial_drawing = generated_struct
+                #st.text_area("JSON Output:", json_output, height=300)
                 with open(data_path, "w") as f:
                     json.dump(generated_struct, f)
 
-            except Exception as e:
-                st.error(f"Error in generating JSON: {str(e)}")
-        else:
-            st.warning("Please enter a theme to generate the JSON.")
+                return draw_canvas()
 
+            except Exception as e:
+                st.error(f"Error in generating Canvas: {str(e)}")
+        else:
+            initial_drawing = {}
+            st.warning("Starting with empty Canvas")
+            return draw_canvas()
+
+    return draw_canvas()
+
+def draw_canvas():
+    # Canvas Tool Selection
+    tool_options = ["transform", "freedraw", "line", "text"]
+    selected_tool = st.radio("Choose drawing tool:", tool_options)
+    drawing_mode = selected_tool
+
+    # Canvas settings
+    stroke_width = st.slider("Stroke width: ", 1, 25, 3)
+    stroke_color = st.color_picker("Stroke color hex: ")
+    bg_color = st.color_picker("Background color hex: ", "#fff")
+    realtime_update = st.checkbox("Update in realtime", True)
+
+    # Displaying and updating the canvas
+    return st_canvas(
+        fill_color="rgba(255, 165, 0, 0.3)",
+        stroke_width=stroke_width,
+        stroke_color=stroke_color,
+        initial_drawing=initial_drawing,
+        background_color=bg_color,
+        update_streamlit=realtime_update,
+        height=text_canvas_h,
+        width=text_canvas_w,
+        drawing_mode=drawing_mode,
+        key="full_app",
+    )
 
 
 client = init_client()
@@ -103,50 +130,29 @@ if not image_cover_path.is_file():
 
 st.image(str(image_cover_path))
 
-ask_chatgpt()
+canvas_result = None
+if initial_drawing is None or len(initial_drawing['objects']) == 0:
+    canvas_result = ask_chatgpt()
+else:
+    st.header("Zeichnen")
+    canvas_result = draw_canvas()
 
-st.header("Configuration")
+if canvas_result:
+    # Display the result
+    if canvas_result.image_data is not None:
+        st.image(canvas_result.image_data)
+    if canvas_result.json_data is not None:
+        objects = pd.json_normalize(canvas_result.json_data["objects"])
+        try:
+            st.dataframe(objects)
+        except ArrowTypeError:
+            pass
 
-# Canvas Tool Selection
-tool_options = ["freedraw", "line", "rect", "circle", "transform", "polygon", "point", "text"]
-selected_tool = st.radio("Choose drawing tool:", tool_options)
-drawing_mode = selected_tool
-
-# Canvas settings
-stroke_width = st.slider("Stroke width: ", 1, 25, 3)
-stroke_color = st.color_picker("Stroke color hex: ")
-bg_color = st.color_picker("Background color hex: ", "#fff")
-realtime_update = st.checkbox("Update in realtime", True)
-
-# Displaying and updating the canvas
-canvas_result = st_canvas(
-    fill_color="rgba(255, 165, 0, 0.3)",
-    stroke_width=stroke_width,
-    stroke_color=stroke_color,
-    initial_drawing=initial_drawing,
-    background_color=bg_color,
-    update_streamlit=realtime_update,
-    height=text_canvas_h,
-    width=text_canvas_w,
-    drawing_mode=drawing_mode,
-    key="full_app",
-)
-
-# Display the result
-if canvas_result.image_data is not None:
-    st.image(canvas_result.image_data)
-if canvas_result.json_data is not None:
-    objects = pd.json_normalize(canvas_result.json_data["objects"])
-    try:
-        st.dataframe(objects)
-    except ArrowTypeError:
-        pass
-
-# Save and send functions
-if st.button("Save"):
-    with open(data_path, "w") as f:
-        json.dump(canvas_result.json_data, f)
-    st.success("Drawing data saved.")
-    img = Image.fromarray(canvas_result.image_data.astype('uint8'), 'RGBA')
-    img.convert("RGB").save(image_message_path, format="jpeg")
-    st.success("Canvas saved as JPEG.")
+    # Save and send functions
+    if st.button("Save"):
+        with open(data_path, "w") as f:
+            json.dump(canvas_result.json_data, f)
+        st.success("Drawing data saved.")
+        img = Image.fromarray(canvas_result.image_data.astype('uint8'), 'RGBA')
+        img.convert("RGB").save(image_message_path, format="jpeg")
+        st.success("Canvas saved as JPEG.")
