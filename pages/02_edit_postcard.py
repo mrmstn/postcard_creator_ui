@@ -1,15 +1,86 @@
 import json
+import os
 from pathlib import PosixPath, Path
 
 import pandas as pd
 import streamlit as st
 from PIL import Image
+from dotenv import load_dotenv, dotenv_values
+from openai import OpenAI
 from pyarrow import ArrowTypeError
 from streamlit_drawable_canvas import st_canvas
 
 from postcard_creator import helper
 from postcard_creator import postcard_img_util
 
+load_dotenv()
+config = dotenv_values(".env")
+
+
+@st.cache_resource
+def init_client():
+    client = OpenAI(
+        # This is the default and can be omitted
+        api_key=os.environ.get("OPENAI_API_KEY"),
+    )
+    return client
+
+
+def get_canvas_json(theme):
+
+    chat_completion = client.chat.completions.create(
+        messages=[
+            {
+                "role": "system",
+                "content": "You are a highly specialized service tasked with generating Fabric.js JSON configurations tailored to user-provided themes."
+                           " Your key responsibilities include:\n"
+                           "- Placing each emoji in its own separate textbox, ensuring diverse styling for each to enhance visual interest.\n"
+                           f"- Randomly positioning these textboxes within the fixed canvas dimensions of W:{text_canvas_w} H:{text_canvas_h}\n"
+                           "- Including a prominent central text in German by default, unless specified otherwise by the user, which symbolizes the theme or sentiment.\n"
+                           "- Utilizing appropriate emojis and decorative elements that visually align with the specified theme.\n"
+                           "- Make the emojis big.\n"
+                           "- Providing detailed specifications for each element on the canvas, including type, position, font size, and any other attributes necessary for effective rendering on a Fabric.js canvas.\n\n"
+                           "The output should strictly be the JSON configuration, containing all necessary details for rendering the canvas effectively, with no additional text or explanations.\n"
+            },
+            {
+                "role": "user",
+                "content": theme
+                ,
+            }
+        ],
+        model="gpt-4-turbo",
+    )
+
+    return chat_completion.choices[0].message.content
+
+
+def ask_chatgpt():
+    st.title("Canvas JSON Generator")
+
+    # Initialize or reset session state
+    if 'refresh' not in st.session_state:
+        st.session_state.refresh = False
+
+    theme = st.text_input("Enter the theme for your Fabric.js canvas:")
+
+    if st.button("Generate JSON"):
+        if theme:
+            try:
+                json_output = get_canvas_json(theme)
+                generated_struct = json.loads(json_output)
+                initial_drawing=generated_struct
+                st.text_area("JSON Output:", json_output, height=300)
+                with open(data_path, "w") as f:
+                    json.dump(generated_struct, f)
+
+            except Exception as e:
+                st.error(f"Error in generating JSON: {str(e)}")
+        else:
+            st.warning("Please enter a theme to generate the JSON.")
+
+
+
+client = init_client()
 text_canvas_w = 720
 text_canvas_h = 744
 
@@ -31,6 +102,8 @@ if not image_cover_path.is_file():
     image_cover_path.write_bytes(image_cover)
 
 st.image(str(image_cover_path))
+
+ask_chatgpt()
 
 st.header("Configuration")
 

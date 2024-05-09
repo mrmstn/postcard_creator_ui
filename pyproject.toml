@@ -48,9 +48,10 @@ setuptools = "*"
 streamlit = "*"
 svgpathtools = "*"
 svgwrite = "*"
-streamlit-drawable-canvas-mrmstn = { url = "https://github.com/mrmstn/streamlit-drawable-canvas/releases/download/v0.9.5/streamlit_drawable_canvas_mrmstn-0.9.5.tar.gz" }
+streamlit-drawable-canvas-mrmstn = { url = "https://github.com/mrmstn/streamlit-drawable-canvas/releases/download/v0.9.6/streamlit_drawable_canvas_mrmstn-0.9.6.tar.gz" }
 streamlit-extras = "^0.4.2"
 streamlit-image-select = "^0.6.0"
+openai = "^1.27.0"
 
 [tool.poetry.dev-dependencies]
 
