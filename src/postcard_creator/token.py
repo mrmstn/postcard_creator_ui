@@ -46,10 +46,10 @@ def _dump_request(response):
     _print_request(response)
     data = dump.dump_all(response)
     try:
-        logger.trace(data.decode())
+        logger.debug(data.decode())
     except Exception:
         data = str(data).replace('\\r\\n', '\r\n')
-        logger.trace(data)
+        logger.debug(data)
 
 
 def _log_and_dump(r):
@@ -58,6 +58,9 @@ def _log_and_dump(r):
 
 
 class Token(object):
+    client_id = 'ae9b9894f8728ca78800942cda638155'
+    client_secret = '89ff451ede545c3f408d792e8caaddf0'
+
     def __init__(self, _protocol='https://'):
         self.protocol = _protocol
         self.base = '{}account.post.ch'.format(self.protocol)
@@ -78,6 +81,24 @@ class Token(object):
         self.token_expires_in = None
         self.token_fetched_at = None
         self.cache_token = False
+        self.refresh_token = None
+        self.token_implementation = None
+        self._access_token_listeners = []
+
+    def add_access_token_listener(self, listener):
+        """Adds a listener for the access token received event."""
+        if callable(listener):
+            self._access_token_listeners.append(listener)
+        else:
+            raise ValueError("Listener must be callable")
+
+    def _notify_access_token_listeners(self, access_token):
+        """Notifies all registered listeners about the new access token."""
+        for listener in self._access_token_listeners:
+            try:
+                listener(access_token, self)
+            except Exception as e:
+                print(f"Error calling listener {listener}: {e}")
 
     def has_valid_credentials(self, username, password, method='mixed'):
         try:
@@ -85,6 +106,18 @@ class Token(object):
             return True
         except PostcardCreatorException:
             return False
+
+    def fetch_token_by_refresh_token(self, refresh_token: str):
+        try:
+            access_token = self.post_refresh_token(refresh_token)
+            logger.debug('swissid refresh_token authentication was successful')
+            implementation_type = 'swissid'
+        except Exception as e:
+            logger.info("swissid refresh_token authentication failed")
+            logger.info(e)
+            raise e
+
+        self.set_auth_info(access_token)
 
     def fetch_token(self, username, password, method='mixed'):
         logger.debug('fetching postcard account token')
@@ -128,13 +161,19 @@ class Token(object):
                 logger.info(e)
                 raise e
 
+        self.set_auth_info(access_token)
+        return access_token
+
+    def set_auth_info(self, access_token):
         try:
-            logger.trace(access_token)
+            logger.debug(access_token)
             self.token = access_token['access_token']
             self.token_type = access_token['token_type']
             self.token_expires_in = access_token['expires_in']
+            self.refresh_token = access_token['refresh_token']
             self.token_fetched_at = datetime.datetime.now()
-            self.token_implementation = implementation_type
+            self.token_implementation = 'swissid'
+            self._notify_access_token_listeners(access_token)
             logger.info("access_token successfully fetched")
 
         except Exception as e:
@@ -264,11 +303,9 @@ class Token(object):
         code_verifier = self._get_code_verifier()
         code_resp_uri = self._get_code(code_verifier)
         redirect_uri = 'ch.post.pcc://auth/1016c75e-aa9c-493e-84b8-4eb3ba6177ef'
-        client_id = 'ae9b9894f8728ca78800942cda638155'
-        client_secret = '89ff451ede545c3f408d792e8caaddf0'
 
         init_data = {
-            'client_id': client_id,
+            'client_id': self.client_id,
             'response_type': 'code',
             'redirect_uri': redirect_uri,
             'scope': 'PCCWEB offline_access',
@@ -307,7 +344,7 @@ class Token(object):
         except Exception as e:
             # only use goto_param without further params
             pass
-        logger.trace("goto parm=" + goto_param)
+        logger.debug("goto parm=" + goto_param)
         if goto_param is None or goto_param == '':
             raise PostcardCreatorException('swissid: cannot fetch goto param')
 
@@ -389,8 +426,8 @@ class Token(object):
         # get access token
         data = {
             'grant_type': 'authorization_code',
-            'client_id': client_id,
-            'client_secret': client_secret,
+            'client_id': self.client_id,
+            'client_secret': self.client_secret,
             'code': resp_code,
             'code_verifier': code_verifier,
             'redirect_uri': redirect_uri,
@@ -400,6 +437,23 @@ class Token(object):
                              data=data,
                              headers=self.swissid_headers,
                              allow_redirects=False)
+        _log_and_dump(resp)
+
+        if 'access_token' not in resp.json() or resp.status_code != 200:
+            raise PostcardCreatorException("not able to fetch access token: " + resp.text)
+
+        return resp.json()
+
+    def post_refresh_token(self, refresh_token: str):
+        url = 'https://pccweb.api.post.ch/OAuth/token'
+        data = {
+            'grant_type': 'refresh_token',
+            'refresh_token': refresh_token,
+            'client_id': self.client_id,
+            'client_secret': self.client_secret,
+        }
+
+        resp = requests.post(url, headers=self.swissid_headers, data=data)
         _log_and_dump(resp)
 
         if 'access_token' not in resp.json() or resp.status_code != 200:
@@ -466,9 +520,10 @@ class Token(object):
 
     def to_json(self):
         return {
-            'fetched_at': self.token_fetched_at,
+            'fetched_at': int(self.token_fetched_at.timestamp()),
             'token': self.token,
             'expires_in': self.token_expires_in,
             'type': self.token_type,
+            'refresh_token': self.refresh_token,
             'implementation': self.token_implementation
         }

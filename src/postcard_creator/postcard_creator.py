@@ -24,10 +24,10 @@ def _get_trace_postcard_sent_dir():
 def _dump_request(response):
     data = dump.dump_all(response)
     try:
-        logger.trace(data.decode())
+        logger.debug(data.decode())
     except Exception:
         data = str(data).replace('\\r\\n', '\r\n')
-        logger.trace(data)
+        logger.debug(data)
 
 
 def _encode_text(text):

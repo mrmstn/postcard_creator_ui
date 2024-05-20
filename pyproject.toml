@@ -52,6 +52,7 @@ streamlit-drawable-canvas-mrmstn = { url = "https://github.com/mrmstn/streamlit-
 streamlit-extras = "^0.4.2"
 streamlit-image-select = "^0.6.0"
 openai = "^1.27.0"
+cryptography = "^42.0.7"
 
 [tool.poetry.dev-dependencies]
 
