@@ -24,7 +24,6 @@ def on_access_token_received(access_token: dict, token: Token):
 
 def init_token():
     token = Token()
-    token.add_access_token_listener(on_access_token_received)
 
     return token
 
@@ -60,7 +59,7 @@ def maybe_refresh_token(token_data: dict):
     # if fetched_at + expires_in < now:
     if True:
         refresh_token = token_data['refresh_token']
-        token.fetch_token_by_refresh_token(refresh_token)
+        token.fetch_token_by_refresh_token(refresh_token, on_access_token_received)
     else:
         token = init_token()
 
@@ -83,14 +82,34 @@ if selected_token:
     st.write(w.get_quota())
     st.write(w.get_user_info())
 
-
-
 st.title('Login App')
 
 email = st.text_input('Email')
 password = st.text_input('Password', type='password')
 
+if "requires_two_fa" not in st.session_state:
+    st.session_state.requires_two_fa = False
+
 if st.button('Login'):
     token = init_token()
+    st.session_state.token = token
+    # Do first step
+    token.authenticate_username_password(username=email, password=password)
 
-    access_token = token.fetch_token(username=email, password=password)
+    finalize = False
+    # Check if 2Fa is necessary
+    if token.next_action != token.AUTHENTICATE_MTAN:
+        st.session_state.requires_two_fa = False
+        token.finish_auth(on_access_token_received)
+        st.success('Login successful')
+    else:
+        st.session_state.requires_two_fa = True
+
+if st.session_state.requires_two_fa or False:
+    token = st.session_state.token
+    two_fa_token = st.text_input('SMS Code')
+    # Do two fa step
+    if st.button('2FA Login', key="two_fa_login"):
+        session = token.authenticate_mtan(two_fa_token)
+        token.finish_auth(on_access_token_received)
+        st.success('Login successful')

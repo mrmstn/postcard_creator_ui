@@ -53,6 +53,7 @@ streamlit-extras = "^0.4.2"
 streamlit-image-select = "^0.6.0"
 openai = "^1.27.0"
 cryptography = "^42.0.7"
+fastapi = "^0.111.0"
 
 [tool.poetry.dev-dependencies]
 
