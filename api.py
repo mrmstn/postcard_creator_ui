@@ -23,7 +23,7 @@ app = FastAPI()
 class PostcardFlow:
     def __init__(self):
         self.mock_send = os.getenv("POSTCARD_MOCK", 'False').lower() in ('true', '1', 't')
-        self.selected_account = None
+        self.selected_account: PostcardCreator | None = None
         self.data_folder = Path(os.getenv("DATA_DIR"))
         self.image_folder = Path(os.getenv("POSTCARD_DIR"))
         self.accounts_folder = Path(os.getenv("ACCOUNTS_DIR"))
@@ -147,7 +147,7 @@ class PostcardFlow:
             message_image_stream=open(message_image_file, 'rb')
         )
 
-        w = PostcardCreator(self.selected_account)
+        w = self.selected_account
         success = w.send_free_card(postcard=card, mock_send=self.mock_send, image_export=True)
         return success
 
@@ -177,7 +177,7 @@ class PostcardFlow:
             print("No available credits")
             return
 
-        self.selected_account = credential
+        self.selected_account: PostcardCreator | None = credential
 
         # Step 3: Load queue from disk
         queue = self.load_queue()
