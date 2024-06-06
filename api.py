@@ -8,7 +8,6 @@ from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from pathlib import Path
-from typing import Union
 
 from dotenv import load_dotenv
 from fastapi import FastAPI
@@ -263,7 +262,7 @@ Empfänger:
 """
 
 
-@app.post("/send-postcard")
+@app.post("/api/send-postcard")
 def read_root():
     pc = PostcardFlow()
     pc.run_flow()
@@ -279,6 +278,6 @@ def read_root():
     return result
 
 
-@app.get("/items/{item_id}")
-def read_item(item_id: int, q: Union[str, None] = None):
-    return {"item_id": item_id, "q": q}
+@app.get("/health")
+def health():
+    return "OK"

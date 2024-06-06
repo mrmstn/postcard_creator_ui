@@ -31,9 +31,11 @@ ENV VIRTUAL_ENV=/venv
 WORKDIR /home/appuser/app
 
 COPY streamlit_app.py   ./streamlit_app.py
+COPY api.py             ./api.py
 COPY pages              ./pages
 
 EXPOSE 8501
 
 COPY docker/run.sh /home/appuser
+COPY docker/run-api.sh /home/appuser
 CMD ["/home/appuser/run.sh"]
