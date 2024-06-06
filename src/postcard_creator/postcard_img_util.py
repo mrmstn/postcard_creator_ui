@@ -1,13 +1,11 @@
 import io
-import math
 import os
 import textwrap
 from math import floor
 from time import strftime, gmtime
 
 import pkg_resources
-from PIL import ImageDraw, ImageFont, Image
-from colorthief import ColorThief
+from PIL import ImageDraw, ImageFont, Image, ImageOps, ImageFilter
 from resizeimage import resizeimage
 
 from postcard_creator.postcard_creator import logger, _get_trace_postcard_sent_dir
@@ -27,9 +25,11 @@ def rotate_and_scale_image(file, image_target_width=154,
                            image_quality_factor=20,
                            image_rotate=True,
                            image_export=False,
-                           enforce_size=False, # = True, will not make image smaller than given w/h, for high resolution submissions
-                           fallback_color_fill=False, # = False, will force resize cover even if image is too small.
+                           enforce_size=False,
+                           # = True, will not make image smaller than given w/h, for high resolution submissions
+                           fallback_color_fill=False,  # = False, will force resize cover even if image is too small.
                            img_format='PNG',
+                           blurry=False,  # New parameter to control background blurring
                            **kwargs):
     with Image.open(file) as image:
         if image_rotate and image.width < image.height:
@@ -41,6 +41,7 @@ def rotate_and_scale_image(file, image_target_width=154,
                  or image.height < image_quality_factor * image_target_height):
             factor_width = image.width / image_target_width
             factor_height = image.height / image_target_height
+
             factor = min([factor_height, factor_width])
 
             logger.debug('image is smaller than default for resize/fill. '
@@ -52,38 +53,47 @@ def rotate_and_scale_image(file, image_target_width=154,
         logger.debug('resizing image from {}x{} to {}x{}'
                      .format(image.width, image.height, width, height))
 
-        # XXX: swissid endpoint expect specific size for postcard
-        # if we have an image which is too small, do not upsample but rather center image and fill
-        # with boundary color which is most dominant color in image
-        #
-        # validate=True will throw exception if image is too small
-        #
-        try:
+        if blurry:
+            # image.thumbnail((width, height))
+
+            # Create a background image by overscaling and blurring the original image
+            background = image.copy()
+            background = ImageOps.fit(background, (width, height), Image.Resampling.BICUBIC, bleed=0.5)
+            background = background.filter(ImageFilter.GaussianBlur(10))
+
+            # Center the resized cover image on the background
+
+            thumb = image.copy()
+            thumb = resize_image_no_crop(thumb, height)
+            offset = ((width - thumb.width) // 2, (height - thumb.height) // 2)
+
+            background.paste(thumb, offset)
+        else:
             cover = resizeimage.resize_cover(image, [width, height], validate=fallback_color_fill)
-        except Exception as e:
-            logger.warning(e)
-            logger.warning(f'resizing image from {image.width}x{image.height} to {width}x{height} failed.'
-                           f' using resize_contain mode as a fallback. Expect boundaries around img')
+            background = cover
 
-            color_thief = ColorThief(file)
-            (r, g, b) = color_thief.get_color(quality=1)
-            color = (r, g, b, 0)
-            cover = resizeimage.resize_contain(image, [width, height], bg_color=color)
-            image_export = True
-            logger.warning(f"using image boundary color {color}, exporting image for visual inspection.")
-
-        cover = cover.convert("RGB")
+        background = background.convert("RGB")
         with io.BytesIO() as f:
-            cover.save(f, img_format)
+            background.save(f, img_format)
             scaled = f.getvalue()
 
         if image_export:
             name = strftime("postcard_creator_export_%Y-%m-%d_%H-%M-%S_cover.jpg", gmtime())
             path = os.path.join(_get_trace_postcard_sent_dir(), name)
             logger.info('exporting image to {} (image_export=True)'.format(path))
-            cover.save(path)
+            background.save(path)
 
     return scaled
+
+
+def resize_image_no_crop(img, new_height):
+    width, height = img.size
+    # Calculate the new width to keep the aspect ratio
+    aspect_ratio = width / height
+    new_width = int(new_height * aspect_ratio)
+
+    # Resize the image with the new dimensions
+    return img.resize((new_width, new_height), Image.Resampling.BICUBIC)
 
 
 def create_text_image(text, image_export=False, **kwargs):

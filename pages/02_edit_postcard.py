@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 from pathlib import PosixPath, Path
 
@@ -13,6 +14,7 @@ from streamlit_drawable_canvas import st_canvas
 from postcard_creator import helper
 from postcard_creator import postcard_img_util
 
+logging.getLogger('postcard_creator').setLevel(logging.DEBUG)
 load_dotenv()
 config = dotenv_values(".env")
 
@@ -124,9 +126,9 @@ image_cover_path: Path = helper.filename_cover(selected_postcard)
 initial_drawing = helper.maybe_load_data(data_path)
 st.header("Vorderseite")
 
-if not image_cover_path.is_file():
-    image_cover = postcard_img_util.make_cover_image(selected_postcard)
-    image_cover_path.write_bytes(image_cover)
+do_blurr = st.checkbox("Don't crop")
+image_cover = postcard_img_util.make_cover_image(selected_postcard, blurry=do_blurr)
+image_cover_path.write_bytes(image_cover)
 
 st.image(str(image_cover_path))
 
