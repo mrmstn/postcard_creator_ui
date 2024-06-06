@@ -129,8 +129,8 @@ class PostcardCreatorSwissId(PostcardCreatorBase):
             img_text_base64 = base64.b64encode(self.create_text_cover(postcard.message)).decode('ascii')
 
         stamp_base64 = None
-        if postcard.message_image_stream is not None:
-            stamp_base64 = base64.b64encode(self.create_text_cover(postcard.message)).decode('ascii')
+        #if postcard.message_image_stream is not None:
+        #    stamp_base64 = base64.b64encode(self.create_text_cover(postcard.message)).decode('ascii')
 
         endpoint = '/card/upload'
         payload = {
