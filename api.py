@@ -197,16 +197,15 @@ class PostcardFlow:
             recipient = self.build_recipient()
 
             # Send email
+            success = self.send_postcard(sender, recipient, cover_file, message_image_file)
+
+            order_id = None
+            if isinstance(success, dict) and "orderId" in success:
+                order_id = success["orderId"]
+
+            mail_text = self.make_mail_text(sender, recipient, order_id=order_id)
+
             try:
-                success = self.send_postcard(sender, recipient, cover_file, message_image_file)
-                success = {"orderId": "1234"}
-
-                order_id = None
-                if "orderId" in success:
-                    order_id = success["orderId"]
-
-                mail_text = self.make_mail_text(sender, recipient, order_id=order_id)
-
                 self.send_email(os.getenv("SMTP_SERVER"),
                                 int(os.getenv("SMTP_PORT")),
                                 os.getenv("SMTP_LOGIN"),
@@ -219,16 +218,16 @@ class PostcardFlow:
                                 attachments=[
                                     cover_file,
                                     message_image_file,
-                                ], )
-
-                # Archive pictures
-                self.archive_pictures(item, success)
-
-                # Update done list and queue
-                done_list.append(str(item))
-                queue.remove(item)
+                                ])
             except Exception as e:
                 print(f"Failed to send email for {item}: {e}")
+
+            # Archive pictures
+            self.archive_pictures(item, success)
+
+            # Update done list and queue
+            done_list.append(str(item))
+            queue.remove(item)
 
         # Save updated done list and queue
         self.save_done_list(done_list)
