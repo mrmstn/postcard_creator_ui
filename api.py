@@ -1,124 +1,283 @@
+import json
+import os
+import random
+import smtplib
+import ssl
+from email import encoders
+from email.mime.base import MIMEBase
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from pathlib import Path
 from typing import Union
 
+from dotenv import load_dotenv
 from fastapi import FastAPI
 
+from postcard_creator import helper
+from postcard_creator.enc_token_provider import EncTokenProvider
+from postcard_creator.postcard_creator import Sender, Recipient, Postcard, PostcardCreator
+
+load_dotenv()
 app = FastAPI()
 
-import os
-import json
-import smtplib
-from email.mime.multipart import MIMEMultipart
-from email.mime.base import MIMEBase
-from email import encoders
-from datetime import datetime
 
-# Function to check available credits
-def check_credits(credentials):
-    for credential in credentials:
-        if credential['available_credits'] > 0:
-            return credential
-    return None
+class PostcardFlow:
+    def __init__(self):
+        self.mock_send = True
+        self.selected_account = None
+        self.data_folder = Path(os.getenv("DATA_DIR"))
+        self.image_folder = Path(os.getenv("POSTCARD_DIR"))
+        self.accounts_folder = Path(os.getenv("ACCOUNTS_DIR"))
 
-# Load queue from disk
-def load_queue(queue_file):
-    if os.path.exists(queue_file):
-        with open(queue_file, 'r') as file:
-            return json.load(file)
-    return []
+        self.done_file = self.data_folder.joinpath('done.json')
+        self.archive_folder = self.image_folder.joinpath('archive')
 
-# Load done list from disk
-def load_done_list(done_file):
-    if os.path.exists(done_file):
-        with open(done_file, 'r') as file:
-            return json.load(file)
-    return []
+        self.token_mngt = EncTokenProvider(self.accounts_folder)
 
-# Save done list to disk
-def save_done_list(done_file, done_list):
-    with open(done_file, 'w') as file:
-        json.dump(done_list, file)
+    # Function to check available credits
+    def check_credits(self, credentials) -> PostcardCreator | None:
+        for credential in credentials:
+            self.token_mngt.decrypt_token(credential)
+            self.token_mngt.maybe_refresh_token()
 
-# Save queue to disk
-def save_queue(queue_file, queue):
-    with open(queue_file, 'w') as file:
-        json.dump(queue, file)
+            w: PostcardCreator = self.token_mngt.postcard_creator
+            quota = w.get_quota()
 
-# Send email with pictures
-def send_email(smtp_server, port, login, password, from_addr, to_addr, subject, body, attachments):
-    msg = MIMEMultipart()
-    msg['From'] = from_addr
-    msg['To'] = to_addr
-    msg['Subject'] = subject
+            if quota['available']:
+                return w
 
-    for file_path in attachments:
-        part = MIMEBase('application', 'octet-stream')
-        with open(file_path, 'rb') as file:
-            part.set_payload(file.read())
-        encoders.encode_base64(part)
-        part.add_header('Content-Disposition', f'attachment; filename={os.path.basename(file_path)}')
-        msg.attach(part)
+        return None
 
-    with smtplib.SMTP(smtp_server, port) as server:
-        server.starttls()
-        server.login(login, password)
-        server.sendmail(from_addr, to_addr, msg.as_string())
+    def list_postcards(self):
+        """List all image postcards in the postcards directory."""
+        # List all image files, primarily focusing on common formats
+        postcards = []
+        covers = []
+        text = []
 
-# Archive pictures
-def archive_pictures(pictures, archive_folder):
-    if not os.path.exists(archive_folder):
-        os.makedirs(archive_folder)
-    for picture in pictures:
-        os.rename(picture, os.path.join(archive_folder, os.path.basename(picture)))
+        exclusions = [
+            helper.is_text,
+            helper.is_cover,
+            helper.is_stamp,
+        ]
 
-def run_flow():
-    credentials = [
-        {'name': 'account1', 'available_credits': 10},
-        {'name': 'account2', 'available_credits': 0},
-    ]
-    queue_file = 'queue.json'
-    done_file = 'done.json'
-    archive_folder = 'archive'
+        for file in self.image_folder.iterdir():
+            if helper.is_cover(file):
+                covers.append(file)
+                continue
 
-    # Step 1: Check credentials for available credits
-    credential = check_credits(credentials)
-    if not credential:
-        print("No available credits")
-        return
+            if helper.is_text(file):
+                text.append(file)
+                continue
 
-    # Step 3: Load queue from disk
-    queue = load_queue(queue_file)
+            # postcards.append(file)
 
-    # Step 4: Load done list
-    done_list = load_done_list(done_file)
+        for text_file in text:
+            origin = helper.filename_origin(text_file)
+            if helper.filename_cover(origin).is_file():
+                postcards.append(origin)
 
-    # Step 5-9: Process queue
-    for item in queue[:]:
+        return postcards
+
+    # Load queue from disk
+    def load_queue(self):
+        return self.list_postcards()
+
+    # Load done list from disk
+    def load_done_list(self):
+        if os.path.exists(self.done_file):
+            with open(self.done_file, 'r') as file:
+                return json.load(file)
+        return []
+
+    # Save done list to disk
+    def save_done_list(self, done_list):
+        with open(self.done_file, 'w') as file:
+            json.dump(done_list, file)
+
+    # Send email with pictures
+    def send_email(self, smtp_server, port, login, password, from_addr, to_addr, subject, body: str, attachments,
+                   order_id=None):
+        msg = MIMEMultipart()
+        msg['From'] = from_addr
+        msg['To'] = to_addr
+        msg['Subject'] = subject
+
+        msg.attach(MIMEText(body, "plain"))
+
+        for file_path in attachments:
+            part = MIMEBase('application', 'octet-stream')
+            with open(file_path, 'rb') as file:
+                part.set_payload(file.read())
+            encoders.encode_base64(part)
+            part.add_header('Content-Disposition', f'attachment; filename={os.path.basename(file_path)}')
+            msg.attach(part)
+
+        context = ssl.create_default_context()
+
+        with smtplib.SMTP_SSL(smtp_server, port, context=context) as server:
+            server.login(login, password)
+            server.sendmail(from_addr, to_addr, msg.as_string())
+
+    # Archive pictures
+    def archive_pictures(self, picture: Path, postcard_status: dict | bool = False):
+        if not os.path.exists(self.archive_folder):
+            os.makedirs(self.archive_folder)
+
+        pictures = [
+            helper.filename_cover(picture),
+            helper.filename_text(picture),
+            helper.filename_data(picture)
+        ]
+
+        if isinstance(postcard_status, dict):
+            new_stem = picture.stem + "_submit"
+            status_file = picture.with_stem(new_stem).with_suffix(".json")
+            with open(status_file, 'w') as file:
+                json.dump(postcard_status, file)
+                pictures.append(file)
+
+        for picture in pictures:
+            os.rename(picture, os.path.join(self.archive_folder, os.path.basename(picture)))
+
+    def send_postcard(self, sender: Sender, recipient: Recipient, cover_file, message_image_file):
+        card = Postcard(
+            recipient=recipient,
+            sender=sender,
+            picture_stream=open(cover_file, 'rb'),
+            message_image_stream=open(message_image_file, 'rb')
+        )
+
+        w = PostcardCreator(self.selected_account)
+        success = w.send_free_card(postcard=card, mock_send=self.mock_send, image_export=True)
+        return success
+
+    @staticmethod
+    def build_recipient():
+        recipient_prename = os.getenv('RECIPIENT_PRENAME')
+        recipient_lastname = os.getenv('RECIPIENT_LASTNAME')
+        recipient_street = os.getenv('RECIPIENT_STREET')
+        recipient_place = os.getenv('RECIPIENT_PLACE')
+        recipient_zip_code = os.getenv('RECIPIENT_ZIP_CODE')
+
+        recipient = Recipient(
+            prename=recipient_prename or None,
+            lastname=recipient_lastname or None,
+            street=recipient_street or None,
+            place=recipient_place or None,
+            zip_code=int(recipient_zip_code))
+
+        return recipient
+
+    def run_flow(self):
+
+        # Step 1: Check credentials for available credits
+        enc_tokens = self.token_mngt.list_tokens()
+        credential = self.check_credits(enc_tokens)
+        if not credential:
+            print("No available credits")
+            return
+
+        self.selected_account = credential
+
+        # Step 3: Load queue from disk
+        queue = self.load_queue()
+
+        # Step 4: Load done list
+        done_list = self.load_done_list()
+
+        # Step 5-9: Process queue
+        item = random.choice(queue)
         if item not in done_list:
             # Load pictures (Assuming item is a filename for simplicity)
-            pictures = [item]
+            cover_file = helper.filename_cover(item)
+            message_image_file = helper.filename_text(item)
+
+            sender = self.build_sender()
+            recipient = self.build_recipient()
 
             # Send email
             try:
-                send_email('smtp.example.com', 587, 'your_email@example.com', 'password',
-                           'your_email@example.com', 'recipient@example.com',
-                           'Subject Here', 'Email body here', pictures)
+                success = self.send_postcard(sender, recipient, cover_file, message_image_file)
+                success = {"orderId": "1234"}
+
+                order_id = None
+                if "orderId" in success:
+                    order_id = success["orderId"]
+
+                mail_text = self.make_mail_text(sender, recipient, order_id=order_id)
+
+                self.send_email(os.getenv("SMTP_SERVER"),
+                                int(os.getenv("SMTP_PORT")),
+                                os.getenv("SMTP_LOGIN"),
+                                os.getenv("SMTP_PASSWORD"),
+
+                                os.getenv("MAIL_FROM_ADDR"),
+                                os.getenv("MAIL_TO_ADDR"),
+                                'Postcard <3',
+                                mail_text,
+                                attachments=[
+                                    cover_file,
+                                    message_image_file,
+                                ], )
 
                 # Archive pictures
-                archive_pictures(pictures, archive_folder)
+                self.archive_pictures(item, success)
 
                 # Update done list and queue
-                done_list.append(item)
+                done_list.append(str(item))
                 queue.remove(item)
             except Exception as e:
                 print(f"Failed to send email for {item}: {e}")
 
-    # Save updated done list and queue
-    save_done_list(done_file, done_list)
-    save_queue(queue_file, queue)
+        # Save updated done list and queue
+        self.save_done_list(done_list)
 
-@app.get("/")
+    def build_sender(self):
+        # TODO: Fetch from swisspost instance
+        w = self.token_mngt.postcard_creator
+        post_profile = w.get_user_info()
+        return Sender(
+            prename=post_profile["firstName"],
+            lastname=post_profile["name"],
+            street=post_profile["street"],
+            place=post_profile["city"],
+            zip_code=post_profile["zip"]
+        )
+
+    def make_mail_text(self, sender, recipient, order_id=None):
+        import datetime
+        now = datetime.datetime.now()
+
+        return f"""
+Datum: {now.strftime("%Y-%m-%d %H:%M:%S")}
+Auftragsnummer: {order_id}
+Absender:
+{sender.prename} {sender.lastname}
+{sender.street} 
+{sender.zip_code} {sender.place}
+
+Empfänger:
+{recipient.prename} {recipient.lastname}
+{recipient.street}
+{recipient.zip_code} {recipient.place}
+"""
+
+
+@app.post("/send-postcard")
 def read_root():
-    return {"Hello": "World"}
+    pc = PostcardFlow()
+    pc.run_flow()
+
+    result = {
+        "order-id": "XXXX",
+        "sendt-date": "XXX",
+        "front-image": "XXX",
+        "back-image": "XXX",
+        "sender": {},
+        "recevier": {}
+    }
+    return result
 
 
 @app.get("/items/{item_id}")

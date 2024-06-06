@@ -17,6 +17,20 @@ def is_cover(file: Path) -> bool:
     return file.stem.endswith(SUFFIX_COVER) and file.suffix == IMAGE_EXTENSION
 
 
+def filename_origin(file: Path) -> Path:
+    stem = file.stem
+    clear_stem = None
+    for suffix in image_stem_suffix:
+        if stem.endswith(suffix):
+            clear_stem = stem.replace(suffix, "")
+
+    if clear_stem:
+        new_stem = clear_stem
+        return file.with_stem(new_stem)
+    else:
+        return file
+
+
 def filename_text(file: Path) -> Path:
     return _make_image_filename(file, SUFFIX_TEXT)
 
