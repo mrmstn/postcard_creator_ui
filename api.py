@@ -22,7 +22,7 @@ app = FastAPI()
 
 class PostcardFlow:
     def __init__(self):
-        self.mock_send = True
+        self.mock_send = os.getenv("POSTCARD_MOCK", 'False').lower() in ('true', '1', 't')
         self.selected_account = None
         self.data_folder = Path(os.getenv("DATA_DIR"))
         self.image_folder = Path(os.getenv("POSTCARD_DIR"))
