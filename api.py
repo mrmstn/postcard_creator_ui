@@ -134,7 +134,7 @@ class PostcardFlow:
             status_file = picture.with_stem(new_stem).with_suffix(".json")
             with open(status_file, 'w') as file:
                 json.dump(postcard_status, file)
-                pictures.append(file)
+                pictures.append(status_file)
 
         for picture in pictures:
             os.rename(picture, os.path.join(self.archive_folder, os.path.basename(picture)))
