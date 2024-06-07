@@ -13,7 +13,7 @@ from requests.adapters import HTTPAdapter
 from requests_toolbelt.utils import dump
 from urllib3 import Retry
 
-from postcard_creator.postcard_creator import PostcardCreatorException
+from postcard_creator.postcard_creator import PostcardCreatorException, PostcardCreatorTokenInvalidException
 
 LOGGING_TRACE_LVL = 5
 logger = logging.getLogger('postcard_creator')
@@ -55,6 +55,12 @@ def _dump_request(response):
 def _log_and_dump(r):
     _log_response(r)
     _dump_request(r)
+
+
+class NoopToken:
+    def __init__(self, token):
+        self.token = token
+        self.token_implementation = 'swissid'
 
 
 class Token(object):
@@ -328,6 +334,15 @@ class Token(object):
 
         resp = requests.post(url, headers=self.swissid_headers, data=data)
         _log_and_dump(resp)
+
+        json_resp = resp.json()
+
+        if 'error' in json_resp:
+            error = json_resp['error']
+            if error == 'invalid_grant':
+                raise PostcardCreatorTokenInvalidException(
+                    "Token not valid anymore."
+                )
 
         if 'access_token' not in resp.json() or resp.status_code != 200:
             raise PostcardCreatorException("not able to fetch access token: " + resp.text)

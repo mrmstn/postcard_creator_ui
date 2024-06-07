@@ -11,13 +11,20 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 from fastapi import FastAPI
+from fastapi.responses import JSONResponse
 
 from postcard_creator import helper
 from postcard_creator.enc_token_provider import EncTokenProvider
-from postcard_creator.postcard_creator import Sender, Recipient, Postcard, PostcardCreator
+from postcard_creator.postcard_creator import Sender, Recipient, Postcard, PostcardCreator, \
+    PostcardCreatorTokenInvalidException
+from postcard_creator.token import NoopToken
 
 load_dotenv()
 app = FastAPI()
+
+
+class NoAccountAvailableException(Exception):
+    pass
 
 
 class PostcardFlow:
@@ -36,14 +43,20 @@ class PostcardFlow:
     # Function to check available credits
     def check_credits(self, credentials) -> PostcardCreator | None:
         for credential in credentials:
-            self.token_mngt.decrypt_token(credential)
-            self.token_mngt.maybe_refresh_token()
+            try:
+                self.token_mngt.decrypt_token(credential)
+                self.token_mngt.maybe_refresh_token()
 
-            w: PostcardCreator = self.token_mngt.postcard_creator
-            quota = w.get_quota()
+                w: PostcardCreator = self.token_mngt.postcard_creator
+                quota = w.get_quota()
 
-            if quota['available']:
-                return w
+                if quota['available']:
+                    return w
+            except PostcardCreatorTokenInvalidException as e:
+                pass
+
+        if self.mock_send:
+            return PostcardCreator(NoopToken("1234"))
 
         return None
 
@@ -77,6 +90,18 @@ class PostcardFlow:
                 postcards.append(origin)
 
         return postcards
+
+    def list_files_with_prefix(self, prefix):
+        directory = self.image_folder
+        matched_files = []
+
+        # Walk through the directory
+        for root, dirs, files in os.walk(directory):
+            for file in files:
+                if file.startswith(prefix):
+                    matched_files.append(os.path.join(root, file))
+
+        return matched_files
 
     # Load queue from disk
     def load_queue(self):
@@ -123,20 +148,14 @@ class PostcardFlow:
         if not os.path.exists(self.archive_folder):
             os.makedirs(self.archive_folder)
 
-        pictures = [
-            helper.filename_cover(picture),
-            helper.filename_text(picture),
-            helper.filename_data(picture)
-        ]
-
         if isinstance(postcard_status, dict):
             new_stem = picture.stem + "_submit"
             status_file = picture.with_stem(new_stem).with_suffix(".json")
             with open(status_file, 'w') as file:
                 json.dump(postcard_status, file)
-                pictures.append(status_file)
 
-        for picture in pictures:
+        files = self.list_files_with_prefix(picture.stem)
+        for picture in files:
             os.rename(picture, os.path.join(self.archive_folder, os.path.basename(picture)))
 
     def send_postcard(self, sender: Sender, recipient: Recipient, cover_file, message_image_file):
@@ -175,9 +194,9 @@ class PostcardFlow:
         credential = self.check_credits(enc_tokens)
         if not credential:
             print("No available credits")
-            return
+            raise NoAccountAvailableException("No available credits")
 
-        self.selected_account: PostcardCreator | None = credential
+        self.selected_account: PostcardCreator = credential
 
         # Step 3: Load queue from disk
         queue = self.load_queue()
@@ -262,18 +281,21 @@ Empfänger:
 """
 
 
+@app.exception_handler(NoAccountAvailableException)
+async def no_account_available_exception_handler(request, exc: NoAccountAvailableException):
+    return JSONResponse(
+        status_code=400,
+        content={"detail": str(exc)},
+    )
+
+
 @app.post("/api/send-postcard")
 def read_root():
     pc = PostcardFlow()
     pc.run_flow()
 
     result = {
-        "order-id": "XXXX",
-        "sendt-date": "XXX",
-        "front-image": "XXX",
-        "back-image": "XXX",
-        "sender": {},
-        "recevier": {}
+        "status": "OK"
     }
     return result
 

@@ -1,13 +1,8 @@
 import logging
-import math
 import os
-from io import BytesIO
 from pathlib import Path
-from time import gmtime, strftime
 
-from PIL import Image
 from requests_toolbelt.utils import dump
-from resizeimage import resizeimage
 
 LOGGING_TRACE_LVL = 5
 logger = logging.getLogger('postcard_creator')
@@ -37,6 +32,9 @@ def _encode_text(text):
 class PostcardCreatorException(Exception):
     server_response = None
 
+
+class PostcardCreatorTokenInvalidException(PostcardCreatorException):
+    pass
 
 class Sender(object):
     def __init__(self, prename, lastname, street, zip_code, place, company='', country=''):
