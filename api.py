@@ -278,6 +278,6 @@ def read_root():
     return result
 
 
-@app.get("/health")
+@app.get("/api/health")
 def health():
     return "OK"
