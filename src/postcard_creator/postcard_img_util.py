@@ -28,7 +28,6 @@ def rotate_and_scale_image(file, image_target_width=154,
                            # = True, will not make image smaller than given w/h, for high resolution submissions
                            fallback_color_fill=False,  # = False, will force resize cover even if image is too small.
                            img_format='PNG',
-                           blurry=False,  # New parameter to control background blurring
                            **kwargs):
     with Image.open(file) as image:
         if image_rotate and image.width < image.height:
