@@ -79,7 +79,7 @@ def process_image(img: Image, target_width, target_height, max_crop_percentage=0
         return img
     else:
         # Resize the image to fit within the target dimensions while maintaining aspect ratio
-        img = resize_image_no_crop(img, target_height)
+        img = ImageOps.contain(img, (target_width, target_height), method=Image.Resampling.LANCZOS)
         resized_width, resized_height = img.size
 
         # Create a background with the target dimensions
