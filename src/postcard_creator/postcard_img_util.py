@@ -5,8 +5,7 @@ from math import floor
 from time import strftime, gmtime
 
 import pkg_resources
-from PIL import ImageDraw, ImageFont, Image, ImageOps, ImageFilter
-from resizeimage import resizeimage
+from PIL import Image, ImageFilter, ImageOps, ImageDraw, ImageFont
 
 from postcard_creator.postcard_creator import logger, _get_trace_postcard_sent_dir
 
@@ -53,37 +52,48 @@ def rotate_and_scale_image(file, image_target_width=154,
         logger.debug('resizing image from {}x{} to {}x{}'
                      .format(image.width, image.height, width, height))
 
-        if blurry:
-            # image.thumbnail((width, height))
+        cover = process_image(image, image_target_width, image_target_height)
 
-            # Create a background image by overscaling and blurring the original image
-            background = image.copy()
-            background = ImageOps.fit(background, (width, height), Image.Resampling.BICUBIC, bleed=0.5)
-            background = background.filter(ImageFilter.GaussianBlur(10))
-
-            # Center the resized cover image on the background
-
-            thumb = image.copy()
-            thumb = resize_image_no_crop(thumb, height)
-            offset = ((width - thumb.width) // 2, (height - thumb.height) // 2)
-
-            background.paste(thumb, offset)
-        else:
-            cover = resizeimage.resize_cover(image, [width, height], validate=fallback_color_fill)
-            background = cover
-
-        background = background.convert("RGB")
+        cover = cover.convert("RGB")
         with io.BytesIO() as f:
-            background.save(f, img_format)
+            cover.save(f, img_format)
             scaled = f.getvalue()
 
         if image_export:
             name = strftime("postcard_creator_export_%Y-%m-%d_%H-%M-%S_cover.jpg", gmtime())
             path = os.path.join(_get_trace_postcard_sent_dir(), name)
             logger.info('exporting image to {} (image_export=True)'.format(path))
-            background.save(path)
+            cover.save(path)
 
     return scaled
+
+
+def process_image(img: Image, target_width, target_height, max_crop_percentage=0.11) -> Image:
+    original_width, original_height = img.size
+    original_aspect_ratio = original_width / original_height
+    target_aspect_ratio = target_width / target_height
+
+    # Determine whether to crop or resize with a blur background
+    if abs(original_aspect_ratio - target_aspect_ratio) < max_crop_percentage:
+        # Perform cropping
+        img = ImageOps.fit(img, (target_width, target_height), method=Image.Resampling.LANCZOS)
+        return img
+    else:
+        # Resize the image to fit within the target dimensions while maintaining aspect ratio
+        img = resize_image_no_crop(img, target_height)
+        resized_width, resized_height = img.size
+
+        # Create a background with the target dimensions
+        background = img.copy().filter(ImageFilter.GaussianBlur(15))
+        background = background.resize((target_width, target_height), Image.Resampling.LANCZOS)
+
+        # Calculate the position to paste the resized image
+        paste_x = (target_width - resized_width) // 2
+        paste_y = (target_height - resized_height) // 2
+
+        # Paste the resized image onto the background
+        background.paste(img, (paste_x, paste_y))
+        return background
 
 
 def resize_image_no_crop(img, new_height):
@@ -93,7 +103,7 @@ def resize_image_no_crop(img, new_height):
     new_width = int(new_height * aspect_ratio)
 
     # Resize the image with the new dimensions
-    return img.resize((new_width, new_height), Image.Resampling.BICUBIC)
+    return img.resize((new_width, new_height), Image.Resampling.LANCZOS)
 
 
 def create_text_image(text, image_export=False, **kwargs):
