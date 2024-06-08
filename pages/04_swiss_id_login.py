@@ -52,7 +52,7 @@ if st.button('Login'):
 
     finalize = False
     # Check if 2Fa is necessary
-    if token.next_action != token.AUTHENTICATE_MTAN:
+    if token.next_action == token.ACTION_SEND_DEVICE_PRINT:
         st.session_state.requires_two_fa = False
         token_mngr.finish_auth()
         st.success('Login successful')
@@ -60,9 +60,19 @@ if st.button('Login'):
         st.session_state.requires_two_fa = True
 
 if st.session_state.requires_two_fa or False:
-    two_fa_token = st.text_input('SMS Code')
-    # Do two fa step
-    if st.button('2FA Login', key="two_fa_login"):
-        session = token_mngr.token.authenticate_mtan(two_fa_token)
-        token_mngr.finish_auth()
-        st.success('Login successful')
+    token = token_mngr.token
+    next_action = token_mngr.token.next_action
+    if next_action == token.AUTHENTICATE_MTAN:
+        two_fa_token = st.text_input('SMS Code')
+        # Do two fa step
+        if st.button('2FA Login', key="two_fa_login"):
+            session = token_mngr.token.authenticate_mtan(two_fa_token)
+            token_mngr.finish_auth()
+            st.success('Login successful')
+
+    elif next_action == token.ACTION_WAIT_SWISS_ID_APP:
+        st.text("Bitte bestätige jetzt den Login in der App")
+        # Do two fa step
+        if st.button('Weiter', key="two_fa_login"):
+            token_mngr.finish_auth()
+            st.success('Login successful')
