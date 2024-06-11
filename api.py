@@ -1,14 +1,18 @@
+import asyncio
 import json
 import os
 import random
 import smtplib
 import ssl
+from datetime import datetime
 from email import encoders
 from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from pathlib import Path
+from typing import Dict
 
+from dateutil import parser
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
@@ -281,6 +285,58 @@ Empfänger:
 """
 
 
+# In-memory cache
+cache: Dict[int, datetime] = {}
+pc = PostcardFlow()
+
+last_submission = None
+last_run = None
+
+# Background task to check dates in cache
+async def check_dates():
+    global cache, last_run, last_submission
+
+    while True:
+        now = datetime.now()  # Make it offset-aware in UTC
+
+        for account_id, date in list(cache.items()):
+            if date < now:
+                pc.run_flow()
+                last_submission = datetime.now()
+                cache = make_cache()
+
+        last_run = now
+        await asyncio.sleep(60)  # Check every minute
+
+
+def make_cache():
+    enc_tokens = pc.token_mngt.list_tokens()
+    mapping = {}
+    for enc_token in enc_tokens:
+        try:
+            pc.token_mngt.decrypt_token(enc_token)
+            pc.token_mngt.maybe_refresh_token()
+
+            w: PostcardCreator = pc.token_mngt.postcard_creator
+            quota = w.get_quota()
+            next_date = parser.parse(quota['next'])
+            mapping[enc_token] = next_date.replace(tzinfo=None)
+        except Exception as e:
+            pass
+
+    return mapping
+
+
+@app.on_event("startup")
+async def startup_event():
+    global run_task, cache
+    # Populate the cache with some initial data
+    cache = make_cache()
+
+    # Start the background task
+    run_task = asyncio.create_task(check_dates())
+
+
 @app.exception_handler(NoAccountAvailableException)
 async def no_account_available_exception_handler(request, exc: NoAccountAvailableException):
     return JSONResponse(
@@ -289,15 +345,9 @@ async def no_account_available_exception_handler(request, exc: NoAccountAvailabl
     )
 
 
-@app.post("/api/send-postcard")
-def read_root():
-    pc = PostcardFlow()
-    pc.run_flow()
-
-    result = {
-        "status": "OK"
-    }
-    return result
+@app.get("/api/status")
+def get_status():
+    return {"last_run": last_run, "last_submission": last_submission, "cache": cache}
 
 
 @app.get("/api/health")
