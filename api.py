@@ -360,8 +360,6 @@ def get_status():
 def read_root():
     global last_run, last_submission
     last_run = datetime.now()
-
-    pc = PostcardFlow()
     pc.run_flow()
     last_submission = datetime.now()
 
