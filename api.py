@@ -339,7 +339,8 @@ async def startup_event():
     cache = make_cache()
 
     # Start the background task
-    run_task = asyncio.create_task(check_dates())
+    if os.getenv("RUN_QUEUE", 'False').lower() in ('true', '1', 't'):
+        run_task = asyncio.create_task(check_dates())
 
 
 @app.exception_handler(NoAccountAvailableException)
@@ -352,7 +353,22 @@ async def no_account_available_exception_handler(request, exc: NoAccountAvailabl
 
 @app.get("/api/status")
 def get_status():
-    return {"last_run": last_run, "last_submission": last_submission, "cache": cache}
+    return {"last_check": last_run, "last_submission": last_submission, "cache": cache}
+
+
+@app.post("/api/send-postcard")
+def read_root():
+    global last_run, last_submission
+    last_run = datetime.now()
+
+    pc = PostcardFlow()
+    pc.run_flow()
+    last_submission = datetime.now()
+
+    result = {
+        "status": "OK"
+    }
+    return result
 
 
 @app.get("/api/health")
