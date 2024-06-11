@@ -292,6 +292,7 @@ pc = PostcardFlow()
 last_submission = None
 last_run = None
 
+
 # Background task to check dates in cache
 async def check_dates():
     global cache, last_run, last_submission
@@ -301,8 +302,12 @@ async def check_dates():
 
         for account_id, date in list(cache.items()):
             if date < now:
-                pc.run_flow()
-                last_submission = datetime.now()
+                try:
+                    pc.run_flow()
+                    last_submission = datetime.now()
+                except Exception as e:
+                    pass
+
                 cache = make_cache()
 
         last_run = now
