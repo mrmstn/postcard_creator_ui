@@ -324,7 +324,10 @@ def make_cache():
 
             w: PostcardCreator = pc.token_mngt.postcard_creator
             quota = w.get_quota()
-            next_date = parser.parse(quota['next'])
+            if 'next' in quota:
+                next_date = parser.parse(quota['next'])
+            else:
+                next_date = datetime.now()
             mapping[enc_token] = next_date.replace(tzinfo=None)
         except Exception as e:
             pass
