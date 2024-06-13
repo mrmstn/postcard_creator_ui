@@ -325,7 +325,7 @@ def make_cache():
             w: PostcardCreator = pc.token_mngt.postcard_creator
             quota = w.get_quota()
             if 'next' in quota:
-                next_date = parser.parse(quota['next'])
+                next_date = parser.parse(quota['next'] or "2020-01-01 00:00:00")
             else:
                 next_date = datetime.now()
             mapping[enc_token] = next_date.replace(tzinfo=None)
