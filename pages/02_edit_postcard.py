@@ -1,5 +1,4 @@
 import json
-import logging
 import os
 from pathlib import PosixPath, Path
 
@@ -37,16 +36,14 @@ def get_canvas_json(theme):
                            " Your key responsibilities include:\n"
                            "- Placing each emoji in its own separate textbox, ensuring diverse styling for each to enhance visual interest.\n"
                            f"- Randomly positioning these textboxes within the fixed canvas dimensions of W:{text_canvas_w} H:{text_canvas_h}\n"
-                           "- Including a prominent central text in German by default, unless specified otherwise by the user, which symbolizes the theme or sentiment.\n"
                            "- Utilizing appropriate emojis and decorative elements that visually align with the specified theme.\n"
                            "- Make the emojis big.\n"
                            "- Providing detailed specifications for each element on the canvas, including type, position, font size, and any other attributes necessary for effective rendering on a Fabric.js canvas.\n\n"
-                           "The output should strictly be the JSON configuration, containing all necessary details for rendering the canvas effectively, with no additional text or explanations.\n"
+                           "The output should strictly be the JSON configuration, containing all necessary details for rendering the canvas effectively, with no additional text or explanations. No markdown, just the json string\n"
             },
             {
                 "role": "user",
-                "content": theme
-                ,
+                "content": theme,
             }
         ],
         model="gpt-4o",
@@ -67,7 +64,7 @@ def ask_chatgpt():
                 json_output = get_canvas_json(theme)
                 generated_struct = json.loads(json_output)
                 initial_drawing = generated_struct
-                #st.text_area("JSON Output:", json_output, height=300)
+                # st.text_area("JSON Output:", json_output, height=300)
                 with open(data_path, "w") as f:
                     json.dump(generated_struct, f)
 
@@ -81,6 +78,7 @@ def ask_chatgpt():
             return draw_canvas()
 
     return draw_canvas()
+
 
 def draw_canvas():
     # Canvas Tool Selection
