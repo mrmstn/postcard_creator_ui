@@ -4,7 +4,7 @@ import os
 import random
 import smtplib
 import ssl
-from datetime import datetime
+from datetime import datetime, timezone
 from email import encoders
 from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
@@ -12,6 +12,7 @@ from email.mime.text import MIMEText
 from pathlib import Path
 from typing import Dict
 
+import pytz
 from dateutil import parser
 from dotenv import load_dotenv
 from fastapi import FastAPI
@@ -25,6 +26,7 @@ from postcard_creator.token import NoopToken
 
 load_dotenv()
 app = FastAPI()
+local_tz = pytz.timezone('Europe/Zurich')
 
 
 class NoAccountAvailableException(Exception):
@@ -268,7 +270,7 @@ class PostcardFlow:
 
     def make_mail_text(self, sender, recipient, order_id=None):
         import datetime
-        now = datetime.datetime.now()
+        now = datetime.datetime.now(local_tz)
 
         return f"""
 Datum: {now.strftime("%Y-%m-%d %H:%M:%S")}
@@ -298,13 +300,12 @@ async def check_dates():
     global cache, last_run, last_submission
 
     while True:
-        now = datetime.now()  # Make it offset-aware in UTC
-
+        now = datetime.now(local_tz)  # Make it offset-aware in UTC
         for account_id, date in list(cache.items()):
             if date < now:
                 try:
                     pc.run_flow()
-                    last_submission = datetime.now()
+                    last_submission = datetime.now(local_tz)
                 except Exception as e:
                     pass
 
@@ -324,11 +325,12 @@ def make_cache():
 
             w: PostcardCreator = pc.token_mngt.postcard_creator
             quota = w.get_quota()
-            if 'next' in quota:
-                next_date = parser.parse(quota['next'] or "2020-01-01 00:00:00")
+            if 'next' in quota and quota['next']:
+                next_date = parser.isoparse(quota['next'])
+                next_date = next_date.astimezone(local_tz)
             else:
-                next_date = datetime.now()
-            mapping[enc_token] = next_date.replace(tzinfo=None)
+                next_date = datetime.now(local_tz)
+            mapping[enc_token] = next_date
         except Exception as e:
             pass
 
@@ -362,9 +364,9 @@ def get_status():
 @app.post("/api/send-postcard")
 def read_root():
     global last_run, last_submission
-    last_run = datetime.now()
+    last_run = datetime.now(local_tz)
     pc.run_flow()
-    last_submission = datetime.now()
+    last_submission = datetime.now(local_tz)
 
     result = {
         "status": "OK"
