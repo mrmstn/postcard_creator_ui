@@ -129,12 +129,7 @@ image_cover_path.write_bytes(image_cover)
 
 st.image(str(image_cover_path))
 
-canvas_result = None
-if initial_drawing is None or len(initial_drawing['objects']) == 0:
-    canvas_result = ask_chatgpt()
-else:
-    st.header("Zeichnen")
-    canvas_result = draw_canvas()
+canvas_result = ask_chatgpt()
 
 if canvas_result:
     # Display the result
