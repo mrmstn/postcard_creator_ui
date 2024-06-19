@@ -26,9 +26,15 @@ def select_postcard():
     archive_folder = POSTCARD_DIR.joinpath('archive')
     sent_postcards = list_complete_postcards(archive_folder)
 
-    st.write(f"Versandbereit: {len(complete_postcards)}")
-    st.write(f"Versendet: {len(sent_postcards)}")
-    st.write(f"Ziel: 60")
+    count_complete_postcards = len(complete_postcards)
+    count_sent_postcards = len(sent_postcards)
+    count_target = 60
+    count_pending= count_target - count_complete_postcards - count_sent_postcards
+
+    st.write(f"Versandbereit: {count_complete_postcards}")
+    st.write(f"Versendet: {count_sent_postcards}")
+    st.write(f"Ziel: {count_target}")
+    st.write(f"TODO: {count_pending}")
 
     st.header("Postcard Gallery")
     postcards = list_postcards()
