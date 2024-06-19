@@ -57,6 +57,38 @@ def is_generated_image(file: Path) -> bool:
     return False
 
 
+def list_complete_postcards(image_folder: Path):
+    """List all image postcards in the postcards directory."""
+    # List all image files, primarily focusing on common formats
+    postcards = []
+    covers = []
+    text = []
+
+    exclusions = [
+        is_text,
+        is_cover,
+        is_stamp,
+    ]
+
+    for file in image_folder.iterdir():
+        if is_cover(file):
+            covers.append(file)
+            continue
+
+        if is_text(file):
+            text.append(file)
+            continue
+
+        # postcards.append(file)
+
+    for text_file in text:
+        origin = filename_origin(text_file)
+        if filename_cover(origin).is_file():
+            postcards.append(origin)
+
+    return postcards
+
+
 def _maybe_update_stem(file: Path, suffix: str) -> Path:
     stem = file.stem
     if stem.endswith(suffix):

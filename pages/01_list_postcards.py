@@ -4,6 +4,7 @@ from pathlib import Path
 import streamlit as st
 
 from postcard_creator import helper
+from postcard_creator.helper import list_complete_postcards
 
 POSTCARD_DIR = Path(os.getenv("POSTCARD_DIR"))
 ALLOWED_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.gif']
@@ -18,6 +19,16 @@ def select_postcard():
         with open(file_path, "wb") as f:
             f.write(uploaded_file.getvalue())
         st.success("Uploaded successfully!")
+
+    st.header("Current Statistics")
+    complete_postcards = list_complete_postcards(POSTCARD_DIR)
+
+    archive_folder = POSTCARD_DIR.joinpath('archive')
+    sent_postcards = list_complete_postcards(archive_folder)
+
+    st.write(f"Versandbereit: {len(complete_postcards)}")
+    st.write(f"Versendet: {len(sent_postcards)}")
+    st.write(f"Ziel: 60")
 
     st.header("Postcard Gallery")
     postcards = list_postcards()
